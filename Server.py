@@ -2,6 +2,7 @@ import socket
 import threading
 import traceback
 import logging
+import netaddr
 from _thread import *
 from struct import *
 
@@ -24,7 +25,6 @@ def thread(c):
             print_lock.release()
             break
         data = get_data(data)
-        print(data)
 
 
 def get_data(bytedata):
@@ -36,17 +36,29 @@ def get_data(bytedata):
         return "Error"
 
 
+def sendClientUpdate():
+    for user in userList:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.connect((user["ip"], user["port"]))
+            message = pack("b6s", 2, "Update".encode())
+            s.sendall(message)
+
+
 def registerClient(bytedata):
     nnl = bytedata[1]
-    new_format_string = 'b b s I I'.replace('s', str(nnl) + "s")
+    new_format_string = 'b b s L I'.replace('s', str(nnl) + "s")
 
     try:
         temp_data = unpack(new_format_string, bytedata)
         temp_nickname = temp_data[2]
         temp_ip = temp_data[3]
         temp_port = temp_data[4]
-        userList.append({'nick': temp_nickname, 'ip': temp_ip, 'port': temp_port})
-    except Exception as e:    # Nicht schön, ich weiß, reicht aber für diesen Zweck aus
+        userList.append({'nick': str(temp_nickname), 'ip': str(netaddr.IPAddress(temp_ip)), 'port': temp_port})
+        sendClientUpdate()
+        print("Registered client!\n")
+        print(userList)
+    except Exception as e:  # Nicht schön, ich weiß, reicht aber für diesen Zweck aus
+        print(e)
         logging.error(traceback.format_exc())
 
     return unpack(new_format_string, bytedata)
