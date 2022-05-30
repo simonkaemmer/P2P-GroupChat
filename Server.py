@@ -17,7 +17,7 @@ print_lock = threading.Lock()
 # Fragen: Max len of nickanme?
 # Byte-Anzahlen für die jeweiligen längen?
 
-def thread(c):
+def recv_thread(c):
     while True:
 
         data = c.recv(1024)
@@ -34,6 +34,20 @@ def get_data(bytedata):
         return registerClient(bytedata)
     else:
         return "Error"
+
+
+def sendUserList(ip, port):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.connect((ip, port))
+
+        packed_users = bytes()  # Only Users without ULL and Action-ID
+        count = 0
+
+        for user in userList:
+            nnl = len(user["nick"])
+            packed_users += pack("b " + str(nnl) + "s L I", nnl, user["nick"], user["ip"], user["port"])
+            count += 1
+
 
 
 def sendClientUpdate():
@@ -55,10 +69,11 @@ def registerClient(bytedata):
         temp_port = temp_data[4]
         userList.append({'nick': str(temp_nickname), 'ip': str(netaddr.IPAddress(temp_ip)), 'port': temp_port})
         sendClientUpdate()
-        print("Registered client!\n")
-        print(userList)
+        sendUserList(str(netaddr.IPAddress(temp_ip)), temp_port)
+        print("Server: Registered client!\n")
+        print("Server: " + str(userList))
     except Exception as e:  # Nicht schön, ich weiß, reicht aber für diesen Zweck aus
-        print(e)
+        print("Server: " + str(e))
         logging.error(traceback.format_exc())
 
     return unpack(new_format_string, bytedata)
@@ -71,14 +86,13 @@ def Main():
     s.bind((host, port))
 
     s.listen(5)
-    print("Listening...")
+    print("Server: Listening...")
 
     while True:
         c, addr = s.accept()
 
         print_lock.acquire(timeout=10.0)
-        print("Connected to : ", addr[0], ":", addr[1])
-        start_new_thread(thread, (c,))
+        start_new_thread(recv_thread, (c,))
 
 
 if __name__ == '__main__':
