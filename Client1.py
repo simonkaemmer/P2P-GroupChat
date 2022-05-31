@@ -33,6 +33,13 @@ def send_thread():
     time.sleep(2)
     deregister(s, "Kurt")
 
+def udp_thread():
+    UDPSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    UDPSocket.bind(("127.0.0.1", 20001))
+    while(True):
+        bytes = UDPSocket.recvfrom(1024)
+        message = bytes[0]
+        address = bytes[1]
 
 def register(s):
     # Register
@@ -99,6 +106,7 @@ def get_data(bytedata):
 def Main():
     print("Main running")
     start_new_thread(send_thread, ())
+    start_new_thread(udp_thread, ())
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind(("127.0.0.1", 5001))
