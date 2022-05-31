@@ -1,4 +1,5 @@
 import socket
+import time
 import threading
 from _thread import *
 import netaddr
@@ -7,6 +8,7 @@ from struct import *
 server_ip = "127.0.0.1"
 server_port = 5000
 race_lock = threading.Lock()
+userList = []
 
 
 def recv_thread(c):
@@ -16,16 +18,41 @@ def recv_thread(c):
             race_lock.release()
             break
         data = get_data(data)
-        print("Client: " + str(data))
 
 
 def send_thread():
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     print("Client: Sendthread running")
     s.connect((server_ip, server_port))
-    message = pack('b b 5s L I', 1, 5, "Tanja".encode(), netaddr.IPAddress("127.0.0.1"), 5001)
+
+    register(s)
+    time.sleep(2)
+    regBroadcast(s)
+    time.sleep(2)
+    deregister(s, "Tanja")
+    time.sleep(2)
+    deregister(s, "Kurt")
+
+
+def register(s):
+    # Register
+    nick = "Kurt"
+    message = pack(f'b b {str(len(nick))}s L I', 1, len(nick), nick.encode(), netaddr.IPAddress("127.0.0.1"), 5001)
     s.sendall(message)
-    print("Client: Data sent!")
+
+
+def regBroadcast(s):
+    # Register Broadcast
+    broadcast = "Hello World"
+    message = pack(f"bb{str(len(broadcast))}s", 4, len(broadcast), broadcast.encode())
+    s.sendall(message)
+
+
+def deregister(s, user):
+    nick = user
+    message = pack(f"bb{str(len(nick))}s", 6, len(nick), nick.encode())
+    s.sendall(message)
+    print("UserList:" + str(userList))
 
 
 def get_data(bytedata):
@@ -38,12 +65,33 @@ def get_data(bytedata):
         for x in range(2, len(bytedata)):
             nnl = bytedata[x]
             print("nickname-length: " + str(nnl))
-            nick = unpack("" + str(nnl) + "s", bytedata[x: x + nnl+1])
-            ip = unpack("L", bytedata[x + nnl+1: x + nnl + 2])
+            nick = unpack("" + str(nnl) + "s", bytedata[x: x + nnl + 1])
+            ip = unpack("L", bytedata[x + nnl + 1: x + nnl + 2])
             port = bytedata[x + nnl + 2: x + nnl + 2 + 1]
             print("Nick: " + str(nick) + " ip: " + str(ip) + " port: " + port)
 
-        return "Working"
+        return ""
+    elif action == 3:
+        nnl = bytedata[1]
+        user = unpack(f"bb{nnl}sLI", bytedata)
+        userList.append({'nick': str(user[2]).replace("b'", "").replace("'", ""), 'ip': str(netaddr.IPAddress(user[3])),
+                         'port': user[4]})
+        print("UserList in Client: " + str(userList))
+
+    elif action == 5:
+        bcl = bytedata[1]
+        data = str(unpack(f"bb{bcl}s", bytedata)[2]).replace("'", "").replace("b", "")
+        print("Broadcast: " + data)
+    elif action == 7:
+        print("UserList:" + str(userList))
+        nnl = bytedata[1]
+        nick = str(unpack(f"bb{nnl}s", bytedata)[2]).replace("'", "").replace("b", "")
+        for user in userList:
+            if user["nick"] == nick:
+                userList.remove(user)
+                print(f"User with nick: {nick} logged out")
+            else:
+                print(f"User '{nick}' not found")
     else:
         return "Error"
 

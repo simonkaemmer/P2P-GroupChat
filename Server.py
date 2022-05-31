@@ -32,45 +32,90 @@ def get_data(bytedata):
     action = bytedata[0]
 
     if action == 1:
+        print("Action: Register")
         return registerClient(bytedata)
+    elif action == 4:
+        print("Action: registerBroadcast")
+        print("UserList:" + str(userList))
+        return registerBroadcast(bytedata)
+    elif action == 6:
+        print("Action: Deregister")
+        return deregisterClient(bytedata)
     else:
         return "Error"
 
 
-def sendUserList(ip, port):
+def deregisterClient(bytedata):
+    nnl = bytedata[1]
+    nick = str(unpack(f"bb{nnl}s", bytedata)[2]).replace("'", "").replace("b", "")
+    for user in userList:
+        if user["nick"] == nick:
+            userList.remove(user)
+            print(f"User with nick: {nick} logged out")
+        else:
+            print(f"User '{nick}' not found")
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.connect((ip, port))
-        packed_users = bytes()  # Only Users without ULL and Action-ID
-        count = 0
-
-        for user in packedUserList:
-            if len(packed_users) == 0:
-                packed_users = user
-            else:
-                packed_users += user
-
-            count += 1
-
-        fully_packed_users = pack("bb", 2, count) + packed_users  # bb b 4s L I
-        print("Fully Packed is : " + str(len(fully_packed_users)))
-        print(str(unpack("" + str(len(fully_packed_users)) + "s", fully_packed_users)))
-        print(str(unpack("bbb5sLIbb", fully_packed_users)))
-
-        s.sendall(fully_packed_users)
+        for user in userList:
+            s.connect((user["ip"], user["port"]))
+            message = pack(f"bb{nnl}s", 7, nnl, nick.encode())
+            s.sendall(message)
 
 
-def sendClientUpdate():
+def registerBroadcast(bytedata):
+    bLen = bytedata[1]
+    broadcast = str(unpack(f"bb{bLen}s", bytedata)[2]).replace("b", "").replace("'", "")
+    print("BroadcastMessage: " + broadcast)
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        for user in userList:
+            s.connect((user["ip"], user["port"]))
+            message = pack(f"bb{bLen}s", 5, bLen, broadcast.encode())
+            s.sendall(message)
+
+
+# def sendUserList(ip, port):
+# with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+#     s.connect((ip, port))
+#     packed_users = bytes()  # Only Users without ULL and Action-ID
+#     ull = len(packedUserList)
+#
+#     for user in packedUserList:
+#         print("Single User: " + str(unpack("" + str(len(user)) + "s", user)))
+#         print("Single User: " + str(unpack("bb5sLI", user)))
+#         print(str(unpack("15s", user[1:])))
+#         if len(packed_users) == 0:
+#             packed_users = user[1:]
+#         else:
+#             packed_users = packed_users + user[1:]
+#
+#     fully_packed_users = pack("bb", 2, ull) + packed_users  # bb b 5s L I
+#     print("Fully Packed is : " + str(len(fully_packed_users)))
+#     print(str(unpack("" + str(len(fully_packed_users)) + "s", fully_packed_users)))
+#     print(str(unpack("bbb5sLI", fully_packed_users)))
+#
+#     s.sendall(fully_packed_users)
+
+
+def sendClientUpdate(bytedata):
     for user in userList:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect((user["ip"], user["port"]))
-            message = pack("b6s", 2, "Update".encode())
+            nnl = bytedata[1]
+            data = unpack("bb" + str(nnl) + "sLI", bytedata)
+            message = pack("bb" + str(nnl) + "sLI", 3, nnl, data[2], data[3], data[4])
             s.sendall(message)
 
 
 def registerClient(bytedata):
+    if bytedata in packedUserList:
+        return
+
     packedUserList.append(bytedata)
     nnl = bytedata[1]
+    print("nicknamelen: " + str(nnl))
     new_format_string = 'b b s L I'.replace('s', str(nnl) + "s")
+    print("Format-String:" + new_format_string)
 
     try:
         temp_data = unpack(new_format_string, bytedata)
@@ -80,15 +125,15 @@ def registerClient(bytedata):
         userList.append(
             {'nick': str(temp_nickname).replace("b'", "").replace("'", ""), 'ip': str(netaddr.IPAddress(temp_ip)),
              'port': temp_port})
-        sendClientUpdate()
-        sendUserList(str(netaddr.IPAddress(temp_ip)), temp_port)
+        sendClientUpdate(bytedata)
+        # sendUserList(str(netaddr.IPAddress(temp_ip)), temp_port)
         print("Server: Registered client!\n")
         print("Server: " + str(userList))
     except Exception as e:  # Nicht schön, ich weiß, reicht aber für diesen Zweck aus
         print("Server: " + str(e))
         logging.error(traceback.format_exc())
 
-    return unpack(new_format_string, bytedata)
+    return
 
 
 def Main():
