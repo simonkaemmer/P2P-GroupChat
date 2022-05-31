@@ -10,7 +10,6 @@ race_lock = threading.Lock()
 
 
 def recv_thread(c):
-
     while True:
         data = c.recv(1024)
         if not data:
@@ -29,8 +28,24 @@ def send_thread():
     print("Client: Data sent!")
 
 
-def get_data(data):
-    return unpack("b6s", data)
+def get_data(bytedata):
+    action = bytedata[0]
+
+    if action == 2:
+        ull = bytedata[1]  # b b b 4s L I
+        print("Ull: " + str(ull))
+
+        for x in range(2, len(bytedata)):
+            nnl = bytedata[x]
+            print("nickname-length: " + str(nnl))
+            nick = unpack("" + str(nnl) + "s", bytedata[x: x + nnl+1])
+            ip = unpack("L", bytedata[x + nnl+1: x + nnl + 2])
+            port = bytedata[x + nnl + 2: x + nnl + 2 + 1]
+            print("Nick: " + str(nick) + " ip: " + str(ip) + " port: " + port)
+
+        return "Working"
+    else:
+        return "Error"
 
 
 def Main():

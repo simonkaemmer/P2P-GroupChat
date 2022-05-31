@@ -7,6 +7,7 @@ from _thread import *
 from struct import *
 
 userList = []
+packedUserList = []
 
 nickname_len = 10
 userlist_len = 10
@@ -39,15 +40,23 @@ def get_data(bytedata):
 def sendUserList(ip, port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((ip, port))
-
         packed_users = bytes()  # Only Users without ULL and Action-ID
         count = 0
 
-        for user in userList:
-            nnl = len(user["nick"])
-            packed_users += pack("b " + str(nnl) + "s L I", nnl, user["nick"], user["ip"], user["port"])
+        for user in packedUserList:
+            if len(packed_users) == 0:
+                packed_users = user
+            else:
+                packed_users += user
+
             count += 1
 
+        fully_packed_users = pack("bb", 2, count) + packed_users  # bb b 4s L I
+        print("Fully Packed is : " + str(len(fully_packed_users)))
+        print(str(unpack("" + str(len(fully_packed_users)) + "s", fully_packed_users)))
+        print(str(unpack("bbb5sLIbb", fully_packed_users)))
+
+        s.sendall(fully_packed_users)
 
 
 def sendClientUpdate():
@@ -59,6 +68,7 @@ def sendClientUpdate():
 
 
 def registerClient(bytedata):
+    packedUserList.append(bytedata)
     nnl = bytedata[1]
     new_format_string = 'b b s L I'.replace('s', str(nnl) + "s")
 
@@ -67,7 +77,9 @@ def registerClient(bytedata):
         temp_nickname = temp_data[2]
         temp_ip = temp_data[3]
         temp_port = temp_data[4]
-        userList.append({'nick': str(temp_nickname), 'ip': str(netaddr.IPAddress(temp_ip)), 'port': temp_port})
+        userList.append(
+            {'nick': str(temp_nickname).replace("b'", "").replace("'", ""), 'ip': str(netaddr.IPAddress(temp_ip)),
+             'port': temp_port})
         sendClientUpdate()
         sendUserList(str(netaddr.IPAddress(temp_ip)), temp_port)
         print("Server: Registered client!\n")

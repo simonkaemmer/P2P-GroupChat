@@ -9,7 +9,7 @@ server_ip = "127.0.0.1"
 server_port = 5000
 
 # CLIENT DATA
-client_port = "127.0.0.1"
+client_ip = "127.0.0.1"
 client_port = 5002
 race_lock = threading.Lock()
 
@@ -43,7 +43,7 @@ def Main():
     start_new_thread(send_thread, ())
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.bind(("127.0.0.1", client_port))
+    s.bind((client_ip, client_port))
     s.listen(5)
 
     while True:
